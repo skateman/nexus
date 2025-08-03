@@ -137,3 +137,11 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+
+# Azurite (Azure Storage Emulator)
+.azurite/
+
+# Misc
+.vscode
+.nvmrc
