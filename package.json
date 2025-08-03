@@ -2,7 +2,7 @@
   "name": "nexus-azure-functions",
   "version": "1.0.0",
   "description": "Collection of Azure Functions in Node.js",
-  "main": "index.js",
+  "main": "src/functions/*.js",
   "scripts": {
     "start": "func start",
     "test": "echo \"Warning: no test specified\" && exit 0",
