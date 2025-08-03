@@ -14,18 +14,19 @@ async function scrapeNumber(url) {
     return number;
 }
 
-async function httpTrigger(request, context) {
-    const url = request.query.get('url');
-    const number = await scrapeNumber(url);
+const tankarta = async (request, context) => {
+    // const url = request.query.get('url');
+    // const number = await scrapeNumber(url);
+    context.log(`Http function processed request for url "${request.url}"`);
     
     return {
         status: 200,
-        body: JSON.stringify({ number })
+        body: JSON.stringify({ number: 10 })
     };
 }
 
-app.http('scrapeNumber', {
-    methods: ['GET', 'POST'],
+app.http('tankarta', {
+    methods: ['GET'],
     authLevel: 'anonymous',
-    handler: httpTrigger
+    handler: tankarta
 });
