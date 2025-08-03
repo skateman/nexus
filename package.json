@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "func start",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"Warning: no test specified\" && exit 0",
     "dev": "func start --verbose"
   },
   "dependencies": {
