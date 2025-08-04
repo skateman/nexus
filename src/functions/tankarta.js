@@ -33,15 +33,23 @@ const tankarta = async (myTimer, context) => {
         return price ? parseFloat(price) : null;
     });
 
+    // Extract the remaining credit
+    const credit = await page.evaluate(() => {
+        const element = document.querySelector('.box[data-widget="Prepaid"] .box__content p');
+        return element ? element.textContent.replace(/\s/g, '').replace(',', '.') : null;
+    });
+
     await browser.close();
 
     const finalPrice = (price - DISCOUNT).toFixed(2);
     
-    // Store price data to storage account with expiry date set to tomorrow
+    // Store data to storage account with expiry date set to tomorrow
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
     await storeFile('nexus-results', 'tankarta-price.txt', finalPrice, 'text/plain', tomorrow);
+    await storeFile('nexus-results', 'tankarta-credit.txt', credit, 'text/plain', tomorrow);
 
     context.log(`Tankarta price updated: ${finalPrice}`);
+    context.log(`Tankarta credit updated: ${credit}`);
 }
 
 // Runs once at 3:12:37, 5:12:37, 7:12:37, and 9:12:37 UTC
