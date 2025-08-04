@@ -6,13 +6,18 @@
   "scripts": {
     "start": "func start",
     "test": "echo \"Warning: no test specified\" && exit 0",
-    "dev": "func start --verbose"
+    "dev": "azurite --silent --location .azurite & func start --verbose"
   },
   "dependencies": {
     "@azure/functions": "^4.5.0",
-    "puppeteer": "^24.15.0"
+    "@azure/identity": "^4.10.2",
+    "@azure/storage-blob": "^12.28.0",
+    "puppeteer-core": "^24.15.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0 <23.0.0"
+  },
+  "devDependencies": {
+    "azurite": "^3.35.0"
   }
 }
