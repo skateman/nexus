@@ -12,7 +12,10 @@
     "@azure/functions": "^4.5.0",
     "@azure/identity": "^4.10.2",
     "@azure/storage-blob": "^12.28.0",
-    "puppeteer-core": "^24.15.0"
+    "jsdom": "^26.1.0",
+    "pdf-parse": "^1.1.1",
+    "puppeteer-core": "^24.15.0",
+    "telegraf": "^4.16.3"
   },
   "engines": {
     "node": ">=22.0.0 <23.0.0"
