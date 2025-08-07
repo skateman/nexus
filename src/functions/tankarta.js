@@ -1,11 +1,11 @@
 const { app } = require('@azure/functions');
 const puppeteer = require('puppeteer-core');
-const { storeFile } = require('../utils/storage');
+const { storeFile, getLastRow, storeRow } = require('../utils/storage');
 
 const DISCOUNT = process.env.ORLEN_DISCOUNT ? parseFloat(process.env.ORLEN_DISCOUNT) : 0;
 const TOKEN = process.env.BROWSERLESS_TOKEN;
 
-const tankarta = async (myTimer, context) => {
+const scrape = async () => {
     const browser = await puppeteer.connect({
         browserWSEndpoint: `wss://production-sfo.browserless.io?token=${TOKEN}`,
     });
@@ -42,13 +42,41 @@ const tankarta = async (myTimer, context) => {
     await browser.close();
 
     const finalPrice = (price - DISCOUNT).toFixed(2);
+
+    return { price: parseFloat(finalPrice), credit };
+};
+
+const tankarta = async (myTimer, context) => {
+    // Get the last stored row
+    const lastRow = await getLastRow('tankarta', 'price');
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+    // Skip scraping if we already stored a price today
+    if (lastRow && lastRow.rowKey === today) {
+        context.log(`Price already recorded today: ${lastRow.Price}. Skipping scraping.`);
+        return;
+    }
+
+    // Scrape the data
+    const { price, credit } = await scrape();
+
+    const lastStoredPrice = lastRow ? lastRow.Price : null;
     
-    // Store data to storage account with expiry date set to tomorrow
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
-    await storeFile('nexus-results', 'tankarta-price.txt', finalPrice, 'text/plain', tomorrow);
+    // Early return if price hasn't changed
+    if (lastStoredPrice !== null && lastStoredPrice === price) {
+        context.log(`Price unchanged (${price}). No updates made.`);
+        return;
+    }
+
+    // Store historical data and update blob storage
+    await storeRow('tankarta', 'price', today, { Price: price });
+
+    // Also update blob storage for iOS Shortcuts (current price)
+    const tomorrow = new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000); // 24 hours from today
+    await storeFile('nexus-results', 'tankarta-price.txt', price.toString(), 'text/plain', tomorrow);
     await storeFile('nexus-results', 'tankarta-credit.txt', credit, 'text/plain', tomorrow);
 
-    context.log(`Tankarta price updated: ${finalPrice}`);
+    context.log(`Tankarta price updated: ${price}`);
     context.log(`Tankarta credit updated: ${credit}`);
 }
 
