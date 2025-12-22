@@ -19,7 +19,12 @@ const getClient = (client, options = []) => {
     const service = client.name.replace(/(ServiceClient|Client)$/, '').toLowerCase();
     const uri = process.env[`AzureWebJobsStorage__${service}ServiceUri`];
 
-    return new client(uri, ...options, new DefaultAzureCredential());
+    // For User Assigned Managed Identity, we need to specify the client ID
+    const credential = new DefaultAzureCredential({
+        managedIdentityClientId: process.env.AZURE_CLIENT_ID
+    });
+
+    return new client(uri, ...options, credential);
 };
 
 const getBlobClient = async (containerName, blobName) => {
