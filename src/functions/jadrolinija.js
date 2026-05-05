@@ -335,8 +335,21 @@ const jadrolinija = async (myTimer, context) => {
         if (ais.disrupted) detailParts.push(`AIS: ${ais.activeOnRoute ?? 0}/${ais.trackedVessels?.length ?? 0} vessels active on route`);
         if (ais.status === 'error') detailParts.push(`AIS: ${ais.error}`);
 
+        // Build summary — always populated
+        let summary;
+        if (disrupted === null) {
+            summary = 'All sources failed';
+        } else if (disrupted) {
+            summary = rss.text || `Disrupted — ${detailParts.join('; ')}`;
+        } else {
+            const ships = voyager2.ships?.join(', ') || 'unknown';
+            const departures = voyager2.departuresFound ?? '?';
+            summary = rss.text?.substring(0, 100) || `${ships} — ${departures} departures remaining`;
+        }
+
         routes[route.name] = {
             disrupted,
+            summary,
             sources: { rss, voyager2, aisfriends: ais },
             details: detailParts.length > 0 ? detailParts.join('; ') : null,
         };
