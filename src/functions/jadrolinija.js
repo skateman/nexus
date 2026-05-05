@@ -285,11 +285,15 @@ const checkAisFriends = async (routes, context, voyager2Data = {}) => {
             });
 
             const activeOnRoute = vesselStatuses.filter((v) => v.recentlySeen && v.onRoute);
+            const anyFreshData = vesselStatuses.some((v) => v.recentlySeen);
             const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Europe/Zagreb', hour: 'numeric', hour12: false }));
             const duringService = hour >= 5 && hour < 23;
 
+            // Only flag disruption if we have fresh AIS data AND no vessel is active on route.
+            // Stale data = unknown (null), not disrupted.
             const disrupted = vesselStatuses.length === 0 ? null
                 : !duringService ? null
+                : !anyFreshData ? null
                 : activeOnRoute.length === 0;
 
             results[route.name] = { disrupted, trackedVessels: vesselStatuses, activeOnRoute: activeOnRoute.length };
