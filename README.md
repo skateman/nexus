@@ -33,6 +33,7 @@ Azure Functions for (Home) Automation
 When running locally, your functions will be available at:
 
 - `http://localhost:7071/api/tankarta` - GET/POST - Simple scraper for Tankarta
+- `http://localhost:7071/api/tankstelle/*` - Tankstelle fueling-tracker API
 
 ## Configuration
 
