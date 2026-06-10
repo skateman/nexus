@@ -13,7 +13,7 @@
     "@azure/functions": "^4.5.0",
     "@azure/identity": "^4.10.2",
     "@azure/storage-blob": "^12.28.0",
-    "@skateman/tankstelle": "0.1.0",
+    "@skateman/tankstelle": "0.1.1",
     "jsdom": "^26.1.0",
     "pdf-parse": "^1.1.1",
     "puppeteer-core": "^24.15.0",
