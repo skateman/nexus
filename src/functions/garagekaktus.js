@@ -5,10 +5,19 @@ const { sendMessage } = require('../utils/telegram');
 const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN;
 const DASHBOARD_URL = 'https://sluzby.mujkaktus.cz/moje-sluzby';
 
-// Send a Telegram alert only when the credit can't cover the next data renewal
-// AND there are still enough days to act. Inside that window the alert is
-// "too late" so we stay quiet.
-const ALERT_MIN_DAYS_BEFORE_RENEWAL = 3;
+// Send a Telegram alert only when the credit can't cover the next data renewal.
+// Even then we don't alert on every daily run — a shortfall spotted a month out
+// would otherwise produce a month of identical messages. Instead there are two
+// windows: a single early heads-up exactly 30 days out, and then a daily nag
+// through the final stretch before renewal.
+const ALERT_EARLY_DAYS_BEFORE_RENEWAL = 30;
+const ALERT_URGENT_DAYS_BEFORE_RENEWAL = 3;
+
+// The urgent window is bounded below by 0 so a stale dashboard still showing a
+// past renewal date can't alert forever.
+const isWithinAlertWindow = (daysUntilRenewal) =>
+    daysUntilRenewal === ALERT_EARLY_DAYS_BEFORE_RENEWAL
+    || (daysUntilRenewal >= 0 && daysUntilRenewal <= ALERT_URGENT_DAYS_BEFORE_RENEWAL);
 
 const scrape = async () => {
     const browser = await puppeteer.connect({
@@ -121,8 +130,8 @@ const garagekaktus = async (myTimer, context) => {
         context.log(`garagekaktus: credit (${credit}) >= renewal cost (${renewalCost}); no alert`);
         return;
     }
-    if (daysUntilRenewal < ALERT_MIN_DAYS_BEFORE_RENEWAL) {
-        context.log(`garagekaktus: only ${daysUntilRenewal} day(s) until renewal — too late to act, skipping alert`);
+    if (!isWithinAlertWindow(daysUntilRenewal)) {
+        context.log(`garagekaktus: ${daysUntilRenewal} day(s) until renewal is outside the alert windows (${ALERT_EARLY_DAYS_BEFORE_RENEWAL}-day heads-up, final ${ALERT_URGENT_DAYS_BEFORE_RENEWAL} days); skipping alert`);
         return;
     }
 
@@ -143,4 +152,4 @@ app.timer('garagekaktus', {
     handler: garagekaktus,
 });
 
-module.exports = { daysUntilPragueDate, buildAlertMessage };
+module.exports = { daysUntilPragueDate, buildAlertMessage, isWithinAlertWindow };
