@@ -7,7 +7,7 @@ const TOKEN = process.env.BROWSERLESS_TOKEN;
 
 const scrape = async () => {
     const browser = await puppeteer.connect({
-        browserWSEndpoint: `wss://production-sfo.browserless.io?token=${TOKEN}`,
+        browserWSEndpoint: `wss://production-ams.browserless.io/stealth?token=${TOKEN}&proxy=residential&proxyCountry=cz&proxySticky=true&proxyLocaleMatch=1`,
     });
 
     const page = await browser.newPage();
