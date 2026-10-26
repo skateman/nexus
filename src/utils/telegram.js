@@ -11,7 +11,11 @@ const sendMessage = async (token, chatId, message, options = {}) => {
             ...options
         };
 
-        const result = await bot.telegram.sendMessage(chatId, message, sendOptions);
+        const result = await bot.telegram.callApi('sendMessage', {
+            chat_id: chatId,
+            text: message,
+            ...sendOptions
+        }, { signal: AbortSignal.timeout(15000) });
         return { ok: true, result };
     } catch (error) {
         throw new Error(`Failed to send Telegram message: ${error.message}`);

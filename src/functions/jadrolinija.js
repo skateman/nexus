@@ -1,12 +1,12 @@
 const { app } = require('@azure/functions');
 const { storeFile } = require('../utils/storage');
+const { fetchWithTimeout } = require('../utils/http');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const RSS_URL = 'https://www.jadrolinija.hr/feeds/vijesti';
 const VOYAGER2_BASE = 'https://www2.jadrolinija.hr/voyager2/api';
 const AISFRIENDS_BASE = 'https://www.aisfriends.com/api/public/v1';
-const FETCH_TIMEOUT_MS = 15000;
 const AIS_ACTIVE_THRESHOLD_MS = 3 * 60 * 60 * 1000;
 
 const DISRUPTION_KEYWORDS = [
@@ -40,16 +40,6 @@ const ROUTES = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fetchWithTimeout = async (url, options = {}) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-        return await fetch(url, { ...options, signal: controller.signal });
-    } finally {
-        clearTimeout(timeout);
-    }
-};
-
 const normalize = (text) => text.replace(/<[^>]+>/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
 
 const extractTag = (xml, tagName) => {
@@ -63,9 +53,10 @@ const extractTag = (xml, tagName) => {
 
 const checkRss = async (routes, context) => {
     try {
-        const response = await fetchWithTimeout(RSS_URL);
-        if (!response.ok) throw new Error(`RSS fetch failed: ${response.status}`);
-        const xml = await response.text();
+        const xml = await fetchWithTimeout(RSS_URL, {}, async (response) => {
+            if (!response.ok) throw new Error(`RSS fetch failed: ${response.status}`);
+            return response.text();
+        });
 
         const items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
         const text = items.map((item) => {
@@ -101,7 +92,7 @@ let voyager2Token = null;
 let voyager2TokenExpiresAt = null;
 
 const voyager2Auth = async (context) => {
-    const response = await fetchWithTimeout(`${VOYAGER2_BASE}/Auth/Token`, {
+    const data = await fetchWithTimeout(`${VOYAGER2_BASE}/Auth/Token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -109,10 +100,10 @@ const voyager2Auth = async (context) => {
             DeviceSerialNumber: process.env.VOYAGER2_DEVICE_SERIAL || 'InternetProdaja',
             SessionID: crypto.randomUUID(),
         }),
+    }, async (response) => {
+        if (!response.ok) throw new Error(`Voyager2 auth failed: ${response.status}`);
+        return response.json();
     });
-
-    if (!response.ok) throw new Error(`Voyager2 auth failed: ${response.status}`);
-    const data = await response.json();
 
     voyager2Token = data.AccessToken;
     voyager2TokenExpiresAt = data.ExpirationTimeUtc
@@ -130,7 +121,7 @@ const getVoyager2Token = async (context) => {
 
 const searchVoyages = async (route, token) => {
     const localDate = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Zagreb' });
-    const response = await fetchWithTimeout(`${VOYAGER2_BASE}/Routes/SearchVoyages`, {
+    return fetchWithTimeout(`${VOYAGER2_BASE}/Routes/SearchVoyages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
@@ -139,15 +130,15 @@ const searchVoyages = async (route, token) => {
             DepartureDate: `${localDate}T00:00:00`,
             NoOfPassengers: 1, NoOfVehicles: 0, NoOfBikes: 0,
         }),
+    }, async (response) => {
+        if (response.status === 401) {
+            voyager2Token = null;
+            voyager2TokenExpiresAt = null;
+            throw new Error('Voyager2: token expired');
+        }
+        if (!response.ok) throw new Error(`Voyager2 SearchVoyages failed: ${response.status}`);
+        return response.json();
     });
-
-    if (response.status === 401) {
-        voyager2Token = null;
-        voyager2TokenExpiresAt = null;
-        throw new Error('Voyager2: token expired');
-    }
-    if (!response.ok) throw new Error(`Voyager2 SearchVoyages failed: ${response.status}`);
-    return response.json();
 };
 
 const checkVoyager2 = async (routes, context) => {
@@ -211,21 +202,19 @@ const resolveMMSIs = async (shipNames, route, token, context) => {
     if (unknown.length > 0 && route.areaBbox) {
         try {
             const bbox = route.areaBbox;
-            const response = await fetchWithTimeout(
+            const areaVessels = await fetchWithTimeout(
                 `${AISFRIENDS_BASE}/vessels/bounding-box?lat_min=${bbox.minLat}&lat_max=${bbox.maxLat}&lon_min=${bbox.minLon}&lon_max=${bbox.maxLon}`, {
                     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
-                }
+                },
+                async (response) => response.ok ? response.json() : [],
             );
 
-            if (response.ok) {
-                const areaVessels = await response.json();
-                for (const v of (Array.isArray(areaVessels) ? areaVessels : [])) {
-                    const vName = (v.name || '').toUpperCase();
-                    if (unknown.includes(vName) && v.mmsi) {
-                        discoveredVessels[vName] = String(v.mmsi);
-                        resolved.push(String(v.mmsi));
-                        context.log(`AIS Friends: discovered ${vName} → MMSI ${v.mmsi}`);
-                    }
+            for (const v of (Array.isArray(areaVessels) ? areaVessels : [])) {
+                const vName = (v.name || '').toUpperCase();
+                if (unknown.includes(vName) && v.mmsi) {
+                    discoveredVessels[vName] = String(v.mmsi);
+                    resolved.push(String(v.mmsi));
+                    context.log(`AIS Friends: discovered ${vName} → MMSI ${v.mmsi}`);
                 }
             }
 
@@ -257,14 +246,15 @@ const checkAisFriends = async (routes, context, voyager2Data = {}) => {
             // If still no MMSIs, fall back to all known vessels
             if (mmsiList.length === 0) mmsiList.push(...Object.values(VESSELS).map((v) => v.mmsi));
 
-            const response = await fetchWithTimeout(
+            const vessels = await fetchWithTimeout(
                 `${AISFRIENDS_BASE}/vessels/latest-position?mmsi=${mmsiList.join(',')}`, {
                     headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' },
-                }
+                },
+                async (response) => {
+                    if (!response.ok) throw new Error(`AIS Friends API failed: ${response.status}`);
+                    return response.json();
+                },
             );
-            if (!response.ok) throw new Error(`AIS Friends API failed: ${response.status}`);
-
-            const vessels = await response.json();
             const vesselList = Array.isArray(vessels) ? vessels : [];
             const now = Date.now();
 

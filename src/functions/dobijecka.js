@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { sendMessage } = require('../utils/telegram');
 const { storeFile, getFile } = require('../utils/storage');
+const { fetchWithTimeout } = require('../utils/http');
 const pdfParse = require('pdf-parse');
 const { JSDOM } = require('jsdom');
 
@@ -10,8 +11,10 @@ const CHAT_ID = process.env.DOBIJECKA_TG_CHAT_ID;
 // Helper function to get cookies from homepage
 const getCookies = async () => {
     try {
-        const response = await fetch('https://www.mujkaktus.cz/');
-        const cookieHeader = response.headers.get('set-cookie');
+        const cookieHeader = await fetchWithTimeout('https://www.mujkaktus.cz/', {}, async (response) => {
+            await response.body?.cancel();
+            return response.headers.get('set-cookie');
+        });
         if (cookieHeader) {
             // Simple cookie parsing - extract cookie values
             return cookieHeader.split(',').reduce((cookies, cookie) => {
@@ -50,12 +53,12 @@ const extractTimeIntervalFromPdf = async (pdfUrl, headers, context) => {
     try {
         context.log('Downloading PDF for text extraction...');
 
-        const pdfResponse = await fetch(pdfUrl, { headers });
-        if (!pdfResponse.ok) {
-            throw new Error(`Failed to download PDF: ${pdfResponse.status}`);
-        }
-
-        const pdfBuffer = await pdfResponse.arrayBuffer();
+        const pdfBuffer = await fetchWithTimeout(pdfUrl, { headers }, async (response) => {
+            if (!response.ok) {
+                throw new Error(`Failed to download PDF: ${response.status}`);
+            }
+            return response.arrayBuffer();
+        });
         const pdfData = await pdfParse(Buffer.from(pdfBuffer));
 
         context.log('PDF text length:', pdfData.text.length);
@@ -120,13 +123,12 @@ const dobijecka = async (myTimer, context) => {
             headers['Cookie'] = cookieString;
         }
 
-        const response = await fetch('https://www.mujkaktus.cz/chces-pridat', { headers });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const htmlContent = await response.text();
+        const htmlContent = await fetchWithTimeout('https://www.mujkaktus.cz/chces-pridat', { headers }, async (response) => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        });
 
         // Parse HTML using jsdom
         const dom = new JSDOM(htmlContent);
