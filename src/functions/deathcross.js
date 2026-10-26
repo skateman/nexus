@@ -1,4 +1,5 @@
 const { app } = require('@azure/functions');
+const { fetchWithTimeout } = require('../utils/http');
 const { sendMessage } = require('../utils/telegram');
 const { getLastRow, storeRow } = require('../utils/storage');
 
@@ -28,12 +29,12 @@ const fetchDailyCloses = async () => {
 
     // Yahoo rejects the default undici user-agent, so mimic a browser like the
     // other scrapers in this project do.
-    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!response.ok) {
-        throw new Error(`Yahoo Finance returned HTTP ${response.status} for ${SYMBOL}`);
-    }
-
-    const data = await response.json();
+    const data = await fetchWithTimeout(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, async (response) => {
+        if (!response.ok) {
+            throw new Error(`Yahoo Finance returned HTTP ${response.status} for ${SYMBOL}`);
+        }
+        return response.json();
+    });
     const result = data?.chart?.result?.[0];
     const timestamps = result?.timestamp;
     const closes = result?.indicators?.quote?.[0]?.close;
