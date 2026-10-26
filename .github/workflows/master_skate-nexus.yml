@@ -28,15 +28,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: 'Resolve Project Dependencies Using Npm'
+      - name: 'Resolve Production Dependencies Using Npm'
         shell: bash
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
         run: |
-          pushd './${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}'
-          npm ci
+          npm ci --omit=dev
           npm audit signatures
-          popd
-      - name: Zip artifact for deployment
-        run: zip release.zip ./* -r
+      - name: Zip production artifact for deployment
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        run: zip -q -r "$GITHUB_WORKSPACE/release.zip" host.json package.json package-lock.json src node_modules
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
