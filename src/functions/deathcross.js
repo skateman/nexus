@@ -1,7 +1,7 @@
 const { app } = require('@azure/functions');
+const { fetchWithTimeout } = require('../utils/http');
 const { sendMessage } = require('../utils/telegram');
 const { getLastRow, storeRow } = require('../utils/storage');
-const { fetchWithTimeout } = require('../utils/http');
 
 // The index whose 50-day vs 200-day moving-average relationship we track.
 // Yahoo's chart endpoint expects the caret URL-encoded (^GSPC -> %5EGSPC).
