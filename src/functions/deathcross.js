@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { sendMessage } = require('../utils/telegram');
-const { getLastRow, storeRow } = require('../utils/storage');
+const { getRow, storeRow } = require('../utils/storage');
 
 // The index whose 50-day vs 200-day moving-average relationship we track.
 // Yahoo's chart endpoint expects the caret URL-encoded (^GSPC -> %5EGSPC).
@@ -182,7 +182,7 @@ const deathcross = async (myTimer, context) => {
     // A single durable row per symbol remembers the regime we last acted on, so
     // alerts fire on transitions instead of on every scheduled run.
     const partitionKey = SYMBOL.replace(/[^A-Za-z0-9]/g, '') || 'INDEX';
-    const prev = await getLastRow(TABLE, partitionKey);
+    const prev = await getRow(TABLE, partitionKey, 'current');
     const prevState = prev ? prev.State : null;
 
     const event = decideEvent(prevState, m.regime);
