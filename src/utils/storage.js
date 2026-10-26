@@ -1,5 +1,5 @@
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { TableClient } = require('@azure/data-tables');
+const { TableClient, odata } = require('@azure/data-tables');
 const { DefaultAzureCredential } = require("@azure/identity");
 
 const getClient = (client, options = []) => {
@@ -101,12 +101,24 @@ const getTableClient = async (tableName) => {
     return client;
 };
 
+const getRow = async (tableName, partitionKey, rowKey) => {
+    try {
+        const tableClient = await getTableClient(tableName);
+        return await tableClient.getEntity(partitionKey, rowKey);
+    } catch (error) {
+        if (error.statusCode === 404) {
+            return null;
+        }
+        throw error;
+    }
+};
+
 const getLastRow = async (tableName, partitionKey, orderByRowKey = true) => {
     try {
         const tableClient = await getTableClient(tableName);
 
         const entities = tableClient.listEntities({
-            filter: `PartitionKey eq '${partitionKey}'`
+            queryOptions: { filter: odata`PartitionKey eq ${partitionKey}` }
         });
 
         let lastEntity = null;
@@ -138,4 +150,4 @@ const storeRow = async (tableName, partitionKey, rowKey, data) => {
     console.log(`Row stored successfully: ${partitionKey}/${rowKey} in table ${tableName}`);
 };
 
-module.exports = { storeFile, getFile, getTableClient, getLastRow, storeRow };
+module.exports = { storeFile, getFile, getTableClient, getRow, getLastRow, storeRow };

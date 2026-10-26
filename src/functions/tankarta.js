@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const puppeteer = require('puppeteer-core');
-const { storeFile, getLastRow, storeRow } = require('../utils/storage');
+const { storeFile, getRow, getLastRow, storeRow } = require('../utils/storage');
 
 const DISCOUNT = process.env.ORLEN_DISCOUNT ? parseFloat(process.env.ORLEN_DISCOUNT) : 0;
 const TOKEN = process.env.BROWSERLESS_TOKEN;
@@ -61,7 +61,7 @@ const tankarta = async (myTimer, context) => {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
     const [lastPriceRow, lastCheckRow] = await Promise.all([
         getLastRow('tankarta', 'price'),
-        getLastRow('tankarta', DAILY_CHECK_PARTITION, false),
+        getRow('tankarta', DAILY_CHECK_PARTITION, DAILY_CHECK_ROW),
     ]);
 
     // Later timer slots are retries only; skip after the first successful daily run.
