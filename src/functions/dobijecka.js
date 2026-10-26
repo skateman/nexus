@@ -29,13 +29,17 @@ const getCookies = async () => {
     }
 };
 
-const isToday = (pdfUrl) => {
+const getPromotionDate = (now = new Date()) => new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Prague',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+}).format(now);
+
+const isToday = (pdfUrl, today = getPromotionDate()) => {
     if (!pdfUrl) return false;
 
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, '0');
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const year = today.getFullYear();
+    const [year, month, day] = today.split('-');
     const todayPattern = `${day}${month}${year}`;
 
     // Check if PDF filename contains today's date
@@ -107,6 +111,7 @@ const extractTimeIntervalFromPdf = async (pdfUrl, headers, context) => {
 
 const dobijecka = async (myTimer, context) => {
     try {
+        const today = getPromotionDate();
         // Get cookies first for better session handling
         const cookies = await getCookies();
         const cookieString = Object.entries(cookies)
@@ -143,23 +148,18 @@ const dobijecka = async (myTimer, context) => {
         context.log('Found PDF link:', pdfUrl);
 
         // Check if PDF is for today
-        if (!isToday(pdfUrl)) {
+        if (!isToday(pdfUrl, today)) {
             context.log('PDF is not for today - skipping');
             return;
         }
         context.log('PDF is for today - extracting time interval from PDF...');
 
         // Check if there has been no telegram message sent for today
-        try {
-            const today = new Date().toISOString().split('T')[0];
-            const lastPostedFile = await getFile('nexus-results', 'dobijecka-last.txt');
+        const lastPostedFile = await getFile('nexus-results', 'dobijecka-last.txt');
 
-            if (lastPostedFile && lastPostedFile.content.trim() === today) {
-                context.log('Dobíječka message already posted today - skipping');
-                return;
-            }
-        } catch (error) {
-            context.log('Could not check last posted date:', error.message);
+        if (lastPostedFile && lastPostedFile.content.trim() === today) {
+            context.log('Dobíječka message already posted today - skipping');
+            return;
         }
 
         // Extract time interval text from PDF
@@ -190,7 +190,7 @@ const dobijecka = async (myTimer, context) => {
 
             🔗 <a href="https://www.mujkaktus.cz/chces-pridat">Zobrazit detaily</a>
 
-            <i>Extrahováno: ${new Date(result.extractedAt).toLocaleString('cs-CZ')}</i>
+            <i>Extrahováno: ${new Date(result.extractedAt).toLocaleString('cs-CZ', { timeZone: 'Europe/Prague' })}</i>
         `.replace(/^\s+/gm, '').trim();
 
         const telegramResponse = await sendMessage(TOKEN, CHAT_ID, message, {
@@ -201,7 +201,6 @@ const dobijecka = async (myTimer, context) => {
         context.log(`Telegram message sent successfully: Message ID ${telegramResponse.result.message_id}`);
 
         // Mark that we've posted today
-        const today = new Date().toISOString().split('T')[0];
         const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
         await storeFile('nexus-results', 'dobijecka-last.txt', today, 'text/plain', tomorrow);
 
@@ -216,3 +215,5 @@ app.timer('dobijecka', {
     schedule: '0 */20 12-16 * * *',
     handler: dobijecka
 });
+
+module.exports = { getPromotionDate, isToday };
