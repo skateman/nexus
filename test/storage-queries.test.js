@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
+const { dirname, resolve } = require('node:path');
 const test = require('node:test');
 const { runInNewContext } = require('node:vm');
 const { odata } = require('@azure/data-tables');
@@ -11,11 +11,16 @@ const loadModule = (path, imports, globals = {}) => {
     runInNewContext(readFileSync(filename, 'utf8'), {
         module,
         require: (name) => {
-            assert.ok(name in imports, `Unexpected import: ${name}`);
-            return imports[name];
+            if (name in imports) return imports[name];
+            assert.ok(name.startsWith('.'), `Unexpected import: ${name}`);
+            return loadModule(require.resolve(resolve(dirname(filename), name)), imports, globals);
         },
         process: { env: { AzureWebJobsStorage: 'UseDevelopmentStorage=true' } },
         console: { log() {} },
+        AbortController,
+        DOMException,
+        setTimeout,
+        clearTimeout,
         ...globals,
     }, { filename });
     return module.exports;
