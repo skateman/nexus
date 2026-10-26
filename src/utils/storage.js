@@ -2,6 +2,11 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const { TableClient } = require('@azure/data-tables');
 const { DefaultAzureCredential } = require("@azure/identity");
 
+const containerClients = new Map();
+const tableClients = new Map();
+let blobServiceClient;
+let credential;
+
 const getClient = (client, options = []) => {
     const connectionString = process.env.AzureWebJobsStorage;
 
@@ -20,7 +25,7 @@ const getClient = (client, options = []) => {
     const uri = process.env[`AzureWebJobsStorage__${service}ServiceUri`];
 
     // For User Assigned Managed Identity, we need to specify the client ID
-    const credential = new DefaultAzureCredential({
+    credential ??= new DefaultAzureCredential({
         managedIdentityClientId: process.env.AZURE_CLIENT_ID
     });
 
@@ -28,9 +33,19 @@ const getClient = (client, options = []) => {
 };
 
 const getBlobClient = async (containerName, blobName) => {
-    const container = getClient(BlobServiceClient).getContainerClient(containerName);
-    await container.createIfNotExists();
+    if (!containerClients.has(containerName)) {
+        blobServiceClient ??= getClient(BlobServiceClient);
+        const container = blobServiceClient.getContainerClient(containerName);
+        const ready = container.createIfNotExists()
+            .then(() => container)
+            .catch((error) => {
+                containerClients.delete(containerName);
+                throw error;
+            });
+        containerClients.set(containerName, ready);
+    }
 
+    const container = await containerClients.get(containerName);
     return container.getBlockBlobClient(blobName);
 };
 
@@ -92,13 +107,21 @@ const streamToBuffer = async (readableStream) => {
 };
 
 const getTableClient = async (tableName) => {
-    const client = getClient(TableClient, [tableName]);
-    await client.createTable().catch(err => {
-        // Ignore error if table already exists
-        if (err.statusCode !== 409) throw err;
-    });
+    if (!tableClients.has(tableName)) {
+        const client = getClient(TableClient, [tableName]);
+        const ready = client.createTable()
+            .catch((error) => {
+                if (error.statusCode !== 409) throw error;
+            })
+            .then(() => client)
+            .catch((error) => {
+                tableClients.delete(tableName);
+                throw error;
+            });
+        tableClients.set(tableName, ready);
+    }
 
-    return client;
+    return tableClients.get(tableName);
 };
 
 const getLastRow = async (tableName, partitionKey, orderByRowKey = true) => {
